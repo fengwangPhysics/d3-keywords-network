@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>Reference keyword network</title>
+    <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Tangerine">
+    <link href="https://fonts.googleapis.com/css?family=Indie+Flower" rel="stylesheet">
+    <style>
+        body,
+        #graph {
+            margin-left: 100px;
+            margin-right: 100px;
+        }
+
+        #graph {
+            height: 600px;
+            border: 3px solid black;
+            border-radius: 2em;
+        }
+
+        .node text {
+            /* font: 15px sans-serif bold; */
+            font-family: 'Indie Flower', cursive;
+            font-size: 18px;
+            text-shadow: 4px 4px 4px #aaa;
+            pointer-events: none;
+            opacity: 1.0;
+        }
+
+        .links line {
+            stroke: black;
+            stroke-width: 2px;
+            stroke-opacity: 0.3;
+        }
+
+        .node circle {
+            fill: #F00;
+            stroke: #fff;
+            stroke-width: 1.5px;
+        }
+
+        h2 {
+            font-family: 'Tangerine', serif;
+            font-size: 48px;
+            text-shadow: 4px 4px 4px #aaa;
+        }
+
+        #name {
+            background-color: rgb(50, 160, 50);
+            color: white;
+            font-weight: bold;
+            border-radius: 1em;
+            padding: 0.5em;
+        }
+
+        #infolist {
+            /*background: linear-gradient(141deg, #0fb8ad 0%, #1fc8db 51%, #2cb5e8 75%);
+color: white;
+opacity: 0.95;*/
+        }
+    </style>
+</head>
+
+<body>
+    <div id="graph"></div>
+    <div id="divinfo">
+        <h2>Literature list</h2>
+        <h3><span id="name"></span></h3>
+        <ol id="infolist"></ol>
+    </div>
+
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script>
+        !(function() {
+            "use strict"
+            var width, height
+            var chartWidth, chartHeight
+            var margin
+            var svg = d3.select("#graph").append("svg")
+            var chartLayer = svg.append("g").classed("chartLayer", true)
+
+            var colors = d3.schemeCategory20;
+
+
+
+            d3.json("network.json", function(json) {
+                var data = {
+                    nodes: json.nodes,
+                    links: json.links,
+                    items: json.items,
+                }
+                setSize(data)
+                drawChart(data)
+            });
+
+            function setSize(data) {
+                width = document.querySelector("#graph").clientWidth
+                height = document.querySelector("#graph").clientHeight
+
+                margin = {
+                    top: 0,
+                    left: 0,
+                    bottom: 0,
+                    right: 0
+                }
+
+                chartWidth = width - (margin.left + margin.right)
+                chartHeight = height - (margin.top + margin.bottom)
+
+                svg.attr("width", width).attr("height", height)
+
+                chartLayer
+                    .attr("width", chartWidth)
+                    .attr("height", chartHeight)
+                    .attr("transform", "translate(" + [margin.left, margin.top] + ")")
+            }
+
+            function drawChart(data) {
+                var weightScale = d3.scaleLinear()
+                    .domain(d3.extent(data.links, function(d) {
+                        return d.weight
+                    }))
+                    .range([.1, 1])
+
+                var simulation = d3.forceSimulation()
+                    .force("link", d3.forceLink().id(function(d) {
+                            return d.index
+                        })
+                        .strength(function(d) {
+                            return weightScale(d.weight)
+                        })
+                        .distance(55))
+                    .force("collide", d3.forceCollide(function(d) {
+                        return d.r + 50
+                    }).iterations(10))
+                    .force("charge", d3.forceManyBody())
+                    .force("center", d3.forceCenter(chartWidth / 2, chartHeight / 2))
+                    .force("y", d3.forceY(0))
+                    .force("x", d3.forceX(0))
+
+                var linkedByIndex = {};
+                data.links.forEach(function(d) {
+                    linkedByIndex[d.source + "," + d.target] = true;
+                });
+
+                function isConnected(a, b) {
+                    return isConnectedAsTarget(a, b) || isConnectedAsSource(a, b) || a.index == b.index;
+                }
+
+
+                function isConnectedAsSource(a, b) {
+                    return linkedByIndex[a.index + "," + b.index];
+                }
+
+                function isConnectedAsTarget(a, b) {
+                    return linkedByIndex[b.index + "," + a.index];
+                }
+
+                var link = svg.append("g")
+                    .attr("class", "links")
+                    .selectAll("line")
+                    .data(data.links)
+                    .enter()
+                    .append("line")
+                    .style("stroke-width", function(d) {
+                        return Math.sqrt(d.weight);
+                    });
+
+                link.on("mouseover", function(d) {
+                    d3.select(this).style("stroke", "red")
+                        .style("stroke-opacity", 1.);
+                    d3.select("#name")
+                        .text(d.name);
+                    showcitation(d.infolist);
+
+                    node.style("opacity", function(o) {
+                        return o === d.source || o === d.target ? 1 : 0.2;
+                    });
+                });
+                link.on("mouseout", function() {
+                    d3.select(this).style("stroke", null)
+                        .style("stroke-opacity", null);
+
+                    node.style("opacity", null);
+                });
+
+                var node = svg.selectAll(".node")
+                    .data(data.nodes)
+                    .enter().append("g")
+                    .attr("class", "node")
+                    .on("mouseover", mouseover)
+                    .on("mouseout", mouseout)
+                    .call(d3.drag()
+                        .on("start", dragstarted)
+                        .on("drag", dragged)
+                        .on("end", dragended));
+
+                var nodeSizeExtent = d3.extent(data.nodes, function(d) {
+                    return d.r
+                })
+
+                var nodeScale = d3.scaleSqrt()
+                    .domain(nodeSizeExtent)
+                    .range([3, 30])
+
+                node.append("circle")
+                    .attr("r", function(d) {
+                        return nodeScale(d.r)
+                    })
+                    .style("fill", function(d, i) {
+                        return colors[i % 20];
+                    })
+
+                node.append('text')
+                    .classed('info', true)
+                    .attr('x', 12)
+                    .attr('y', ".35em")
+                    .text(function(d) {
+                        return d.name;
+                    });
+
+                function mouseover(d) {
+                    d3.select(this).select("circle").style("stroke", "blue");
+                    d3.select(this).select('text.info').style("font-weight", "bold")
+                        .style("fill", "blue")
+                        .style("font-size", "20px");
+
+                    d3.select("#name")
+                        .text(d.name)
+                    showcitation(d.infolist);
+
+                    node.style("opacity", function(o) {
+                        return isConnected(o, d) ? 1.0 : 0.2;
+                    });
+
+                    link.style("stroke-opacity", function(o) {
+                        return o.source === d || o.target === d ? 1 : 0.2;
+                    });
+                }
+
+                function mouseout() {
+                    d3.select(this).select("circle").style("stroke", null);
+                    d3.select(this).select('text.info').style("font-weight", null)
+                        .style("fill", null)
+                        .style("font-size", null);
+
+                    node.style("opacity", null);
+                    link.style("stroke-opacity", null);
+                }
+
+                function showcitation(list) {
+                    d3.select("#infolist").text("");
+                    for (var i = 0; i < list.length; i++) {
+                        var item = data.items[String(list[i])];
+                        d3.select("#infolist").append("li")
+                            .append("a")
+                            .attr("href", item.url)
+                            .text(item.title);
+                    }
+                }
+
+
+                var ticked = function() {
+                    link
+                        .attr("x1", function(d) {
+                            return d.source.x;
+                        })
+                        .attr("y1", function(d) {
+                            return d.source.y;
+                        })
+                        .attr("x2", function(d) {
+                            return d.target.x;
+                        })
+                        .attr("y2", function(d) {
+                            return d.target.y;
+                        });
+
+
+                    node.attr("transform", function(d) {
+                        return "translate(" + d.x + "," + d.y + ")";
+                    });
+                }
+
+                simulation
+                    .nodes(data.nodes)
+                    .on("tick", ticked);
+
+                simulation.force("link")
+                    .links(data.links);
+
+
+
+                function dragstarted(d) {
+                    if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+                    d.fx = d.x;
+                    d.fy = d.y;
+                }
+
+                function dragged(d) {
+                    d.fx = d3.event.x;
+                    d.fy = d3.event.y;
+                }
+
+                function dragended(d) {
+                    if (!d3.event.active) simulation.alphaTarget(0);
+                    d.fx = null;
+                    d.fy = null;
+                }
+
+            }
+        }());
+    </script>
+</body>
+
+</html>
