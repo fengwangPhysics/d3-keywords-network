@@ -2,7 +2,8 @@
 
 d3-keywords-network uses `d3.js` (v4) to visualize the reference keywords network.
 
-A visualization of my `zotero` database (~200 papers)
+A visualization of my `zotero` database (~200 papers) https://fengwangphysics.github.io/d3-keywords-network/
+
 ![](screen.png)
 
 Based on this network, one can conclude that
